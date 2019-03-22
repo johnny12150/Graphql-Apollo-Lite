@@ -1,6 +1,6 @@
 var express = require('express');
 var {ApolloServer, gql} = require('apollo-server-express');
-var {makeRemoteExecutableSchema, mergeSchemas} = require('graphql-tools');
+var {makeRemoteExecutableSchema, mergeSchemas, introspectSchema} = require('graphql-tools');
 var {createApolloFetch} = require('apollo-fetch');
 const {RESTDataSource} = require('apollo-datasource-rest');
 
@@ -18,10 +18,39 @@ class RancherAPI extends RESTDataSource {
     }
 
     async getProjects() {
-        return this.get(`v2-beta/projects/1a5`);
+        return this.get('v2-beta/projects/1a5');
     }
 
 }
+
+// 自動建schema (看來僅限於用GraphQL實作的API, 無法解析普通REST API)
+const createRemoteSchema = async (uri) => {
+    const fetcher = createApolloFetch({uri});
+
+    fetcher.use(({request, options}, next) => {
+        console.log(request);
+        if (!options.headers) {
+            options.headers = {};
+        }
+        options.headers['Authorization'] = 'Basic RTA1QzJGQTVDN0Y5MUE2OTcwMTI6dEN5ZTNvM3BZNHd6ak1XV1ZES1RZU0dFRnR0ejJkVXJEbXhjWFBHVA==';
+        options.headers['Accept'] = 'application/ json';
+
+        next();
+    });
+
+    const auto_schema = makeRemoteExecutableSchema({
+        schema: await introspectSchema(fetcher),
+        fetcher
+    });
+
+    return auto_schema;
+};
+
+createRemoteSchema('http://192.168.1.43/v2-beta/projects/1a5').then(res => {
+    console.log(res);
+}).catch(err => {
+    console.log(err);
+});
 
 // 手動刻schema
 const TYPEDEFS = gql`
@@ -79,4 +108,4 @@ SERVER.applyMiddleware({
 
 
 app.listen(4000);
-console.log('Server running. Open http://localhost:4000/graphiql to run queries.');
+console.log('Server running. Open http://localhost:4000/graphql to run queries.');
